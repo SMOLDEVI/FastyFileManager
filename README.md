@@ -53,8 +53,8 @@ cd FastyFileManager
 # Собрать проект (требуется Rust 1.70+)
 cargo build --release
 
-# Бинарник будет в target/release/fastyfm
-./target/release/fastyfm
+# Бинарник будет в target/release/ffm
+./target/release/ffm
 ```
 ## 🔧 Build Guide
 
