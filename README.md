@@ -109,7 +109,7 @@ copy target\release\ffm.exe C:\Windows\System32\
 $env:PATH += ";C:\path\to\FastyFileManager\target\release"
 Сборка для разных архитектур
 PowerShell
-
+```
 
 
 <p align="center"> Made with ❤️ and 🦀 Rust </p> ```
