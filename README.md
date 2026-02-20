@@ -37,7 +37,7 @@
 
 ## 📦 Installation
 
-## 📋 Requirements
+### 📋 Requirements
 
 - [Rust](https://rustup.rs/) 1.70+
 - Cargo (устанавливается вместе с Rust)
