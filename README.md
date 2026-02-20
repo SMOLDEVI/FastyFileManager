@@ -112,4 +112,4 @@ PowerShell
 ```
 
 
-<p align="center"> Made with ❤️ and 🦀 Rust </p> ```
+<p align="center"> Made with ❤️ and 🦀 Rust </p> 
