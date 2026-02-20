@@ -37,6 +37,12 @@
 
 ## 📦 Installation
 
+## 📋 Requirements
+
+- [Rust](https://rustup.rs/) 1.70+
+- Cargo (устанавливается вместе с Rust)
+
+
 ### Из исходников
 
 ```bash
@@ -50,16 +56,11 @@ cargo build --release
 # Бинарник будет в target/release/fastyfm
 ./target/release/fastyfm
 ```
-# 🔧 Build Guide
+## 🔧 Build Guide
 
-Инструкция по сборке FastyFileManager для Windows и Linux.
+## Инструкция по сборке FastyFileManager для Windows и Linux.
 
 ---
-
-## 📋 Requirements
-
-- [Rust](https://rustup.rs/) 1.70+
-- Cargo (устанавливается вместе с Rust)
 
 ```bash
 # Проверить версию Rust
@@ -96,8 +97,10 @@ cargo build --release
 
 # Бинарник будет здесь:
 .\target\release\ffm.exe
-Установка в систему
-PowerShell
+```
+### Установка в систему
+
+```PowerShell
 
 # Вариант 1: через cargo
 cargo install --path .
@@ -107,8 +110,6 @@ copy target\release\ffm.exe C:\Windows\System32\
 
 # Или добавить папку в PATH
 $env:PATH += ";C:\path\to\FastyFileManager\target\release"
-Сборка для разных архитектур
-PowerShell
 ```
 
 
