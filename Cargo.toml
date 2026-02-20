@@ -1,0 +1,15 @@
+[package]
+name = "ffm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+crossterm = "0.29.0"
+num_parser = "1.0.2"
+rand = "0.10.0-rc.5"
+ratatui = "0.30.0-beta.0"
+open = "5.3.3"
+serde = {version = "1.0.228", features = ["derive"]}
+toml = "0.9.10+spec-1.1.0"
+directories = "6.0.0"
+sysinfo = "0.37.2"

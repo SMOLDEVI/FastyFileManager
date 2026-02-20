@@ -1,0 +1,21 @@
+[theme]
+background = "Reset"
+text = "White"
+selected_bg = "Blue"
+selected_fg = "Black"
+directory = "Cyan"
+file = "Gray"
+highlight_symbol = ""
+
+[keys]
+quit = "q"
+search = "/" 
+cancel = "esc"
+submit = "enter"
+down = "j"
+up = "k"
+delete = "D"        
+create = "a"
+focus_files = "ctrl-l"
+focus_drives = "s"
+back_dir = "backspace"
