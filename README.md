@@ -60,8 +60,6 @@ cargo build --release
 
 ## Инструкция по сборке FastyFileManager для Windows и Linux.
 
----
-
 ```bash
 # Проверить версию Rust
 rustc --version
