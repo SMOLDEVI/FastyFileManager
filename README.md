@@ -47,7 +47,7 @@
 
 ```bash
 # Клонировать репозиторий
-git clone https://github.com/your-username/FastyFileManager.git
+git clone https://github.com/SMOLDEVI/FastyFileManager.git
 cd FastyFileManager
 
 # Собрать проект (требуется Rust 1.70+)
@@ -71,7 +71,7 @@ cargo --version
 ```Bash
 
 # Клонировать репозиторий
-git clone https://github.com/your-username/FastyFileManager.git
+git clone https://github.com/SMOLDEVI/FastyFileManager.git
 cd FastyFileManager
 
 chmod +x build.sh
@@ -84,7 +84,7 @@ chmod +x build.sh
 PowerShell
 ```bash
 # Клонировать репозиторий
-git clone https://github.com/your-username/FastyFileManager.git
+git clone https://github.com/SMOLDEVI/FastyFileManager.git
 cd FastyFileManager
 
 # Сборка для разработки
