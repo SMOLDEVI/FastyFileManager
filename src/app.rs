@@ -52,6 +52,11 @@ pub struct App {
     pub favorites: Vec<PathBuf>,
     pub favorites_state: ListState,
 
+    /// Показывать нижний статус-бар
+    pub show_statusbar: bool,
+    /// Показывать попап с помощью
+    pub show_help: bool,
+
     pub config: Config,
 }
 
@@ -83,6 +88,8 @@ impl App {
             clipboard: None,
             favorites,
             favorites_state: ListState::default(),
+            show_statusbar: true,
+            show_help: false,
             config,
         };
 
@@ -344,6 +351,24 @@ impl App {
                 // --- GLOBAL: HOT RELOAD ---
                 if key.code == KeyCode::F(5) || key_matches(&key, &self.config.keys.reload) {
                     self.reload_config();
+                    continue;
+                }
+
+                // --- GLOBAL: TOGGLE STATUSBAR (Ctrl+B) ---
+                if key.code == KeyCode::Char('b') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    self.show_statusbar = !self.show_statusbar;
+                    continue;
+                }
+
+                // --- GLOBAL: TOGGLE HELP POPUP (?) ---
+                if key.code == KeyCode::Char('?') {
+                    self.show_help = !self.show_help;
+                    continue;
+                }
+
+                // Esc закрывает help попап
+                if key.code == KeyCode::Esc && self.show_help {
+                    self.show_help = false;
                     continue;
                 }
 

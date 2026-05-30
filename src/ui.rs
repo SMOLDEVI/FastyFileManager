@@ -5,7 +5,8 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    text::{Line, Span},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 
 pub fn render(f: &mut Frame, app: &mut App) {
@@ -21,7 +22,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     let active_border_color = sel_bg;
     let inactive_border_color = Color::DarkGray;
-    let favorites_border_color = Color::Rgb(150, 120, 200); // фиолетовый акцент для избранного
+    let favorites_border_color = Color::Rgb(150, 120, 200);
 
     let area = f.area();
 
@@ -29,17 +30,20 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let main_block = Block::default().style(Style::default().bg(bg_color));
     f.render_widget(main_block, area);
 
-    // Вертикальное деление: Основной контент + Статус бар
+    // Вертикальное деление: Основной контент + (опционально) Статус бар
+    let vertical_constraints = if app.show_statusbar {
+        vec![Constraint::Min(1), Constraint::Length(3)]
+    } else {
+        vec![Constraint::Min(1)]
+    };
+
     let vertical_chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
-        .constraints([Constraint::Min(1), Constraint::Length(3)])
+        .constraints(vertical_constraints)
         .split(area);
 
-    // Горизонтальное деление:
-    // 20% Левая панель (Диски + Избранное)
-    // 40% Список файлов (Центр)
-    // 40% Превью (Справа)
+    // Горизонтальное деление: 20% | 40% | 40%
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -53,8 +57,8 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let left_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(50), // Избранное
-            Constraint::Percentage(50), // Диски
+            Constraint::Percentage(50),
+            Constraint::Percentage(50),
         ])
         .split(main_chunks[0]);
 
@@ -94,6 +98,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .title(" ★ Favorites ")
                 .border_style(fav_border_style)
                 .style(Style::default().bg(bg_color)),
@@ -134,6 +139,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .title(" Drives ")
                 .border_style(drive_border_style)
                 .style(Style::default().bg(bg_color)),
@@ -151,7 +157,6 @@ pub fn render(f: &mut Frame, app: &mut App) {
             let name = path.file_name().unwrap_or_default().to_string_lossy();
             let icon = get_icon(path);
 
-            // Помечаем файл в буфере обмена
             let in_clipboard = app
                 .clipboard
                 .as_ref()
@@ -174,7 +179,6 @@ pub fn render(f: &mut Frame, app: &mut App) {
                 ""
             };
 
-            // Иконка "звёздочка" если в избранном
             let fav_mark = if app.favorites.contains(path) { " ★" } else { "" };
 
             let content = format!("{} {}{}{}", icon, name, marker, fav_mark);
@@ -209,6 +213,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .title(list_title)
                 .border_style(file_border_style)
                 .style(Style::default().bg(bg_color)),
@@ -221,6 +226,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
     // --- 4. ПАНЕЛЬ ПРЕВЬЮ (СПРАВА) ---
     let preview_block = Block::default()
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .title(" Preview ")
         .border_style(Style::default().fg(inactive_border_color))
         .style(Style::default().bg(bg_color));
@@ -232,66 +238,76 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     f.render_widget(preview_text, main_chunks[2]);
 
-    // --- ФУТЕР ---
-    let clipboard_hint = match &app.clipboard {
-        Some((p, ClipboardOp::Copy)) => format!(
-            " [Copy: {}]",
-            p.file_name().unwrap_or_default().to_string_lossy()
-        ),
-        Some((p, ClipboardOp::Cut)) => format!(
-            " [Cut: {}]",
-            p.file_name().unwrap_or_default().to_string_lossy()
-        ),
-        None => String::new(),
-    };
-
-    let mode_text = match app.input_mode {
-        InputMode::Normal => match app.focus {
-            Focus::FileList => "FILES",
-            Focus::DriveList => "DRIVES",
-            Focus::Favorites => "FAVORITES",
-        },
-        InputMode::Editing => "EDITING",
-        InputMode::Search => "SEARCHING",
-    };
-
-    let keys_hint = match app.input_mode {
-        InputMode::Normal => match app.focus {
-            Focus::FileList => format!(
-                "[hjkl/←↑↓→]Nav [a]New [D]Del [{}]Edit [y]Copy [x]Cut [p]Paste [f]Fav [/]Search [Tab]Switch",
-                app.config.keys.edit
+    // --- ФУТЕР (если включён) ---
+    if app.show_statusbar {
+        let clipboard_hint = match &app.clipboard {
+            Some((p, ClipboardOp::Copy)) => format!(
+                " │ 󰆏 Copy: {}",
+                p.file_name().unwrap_or_default().to_string_lossy()
             ),
-            Focus::DriveList => "[jk/↑↓]Nav [Enter]Open [Tab]Switch".to_string(),
-            Focus::Favorites => "[jk/↑↓]Nav [Enter]Open [D/F]Remove [Tab]Switch".to_string(),
-        },
-        InputMode::Editing => "[Enter]Save [Esc]Cancel".to_string(),
-        InputMode::Search => "[Enter]Confirm [Esc]Cancel".to_string(),
-    };
+            Some((p, ClipboardOp::Cut)) => format!(
+                " │ 󰆐 Cut: {}",
+                p.file_name().unwrap_or_default().to_string_lossy()
+            ),
+            None => String::new(),
+        };
 
-    let status_text = format!(
-        " {} | {}{} | {}",
-        mode_text, keys_hint, clipboard_hint, app.message
-    );
-    let footer = Paragraph::new(status_text)
-        .style(Style::default().fg(text_color).bg(bg_color))
-        .block(
-            Block::default()
-                .borders(Borders::TOP)
-                .style(Style::default().bg(bg_color)),
+        let mode_text = match app.input_mode {
+            InputMode::Normal => match app.focus {
+                Focus::FileList => " FILES",
+                Focus::DriveList => " DRIVES",
+                Focus::Favorites => "★ FAVORITES",
+            },
+            InputMode::Editing => " EDITING",
+            InputMode::Search => " SEARCH",
+        };
+
+        let keys_hint = match app.input_mode {
+            InputMode::Normal => match app.focus {
+                Focus::FileList => format!(
+                    "hjkl Nav │ a New │ D Del │ {} Edit │ y Copy │ x Cut │ p Paste │ f Fav │ / Search │ ? Help │ Ctrl+B Bar",
+                    app.config.keys.edit
+                ),
+                Focus::DriveList => "jk Nav │ Enter Open │ Tab Switch │ ? Help │ Ctrl+B Bar".to_string(),
+                Focus::Favorites => "jk Nav │ Enter Open │ D Remove │ Tab Switch │ ? Help │ Ctrl+B Bar".to_string(),
+            },
+            InputMode::Editing => "Enter Save │ Esc Cancel".to_string(),
+            InputMode::Search => "Enter Confirm │ Esc Cancel │ ↑↓ Navigate".to_string(),
+        };
+
+        let msg = if app.message.is_empty() {
+            String::new()
+        } else {
+            format!(" │ {}", app.message)
+        };
+
+        let status_text = format!(
+            " {} │ {}{}{} ",
+            mode_text, keys_hint, clipboard_hint, msg
         );
+        let footer = Paragraph::new(status_text)
+            .style(Style::default().fg(text_color).bg(bg_color))
+            .block(
+                Block::default()
+                    .borders(Borders::TOP)
+                    .border_style(Style::default().fg(inactive_border_color))
+                    .style(Style::default().bg(bg_color)),
+            );
 
-    f.render_widget(footer, vertical_chunks[1]);
+        f.render_widget(footer, vertical_chunks[1]);
+    }
 
     // --- POPUPS ---
 
-    // Создание файла
+    // Создание файла/папки
     if let InputMode::Editing = app.input_mode {
         let area_rect = centered_rect(60, 20, area);
         f.render_widget(Clear, area_rect);
 
         let popup_block = Block::default()
-            .title(" New file/folder (end name with / for folder) ")
+            .title(" New file/folder  (end name with / for folder) ")
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .style(Style::default().bg(bg_color).fg(text_color));
 
         let input_text = Paragraph::new(app.input_buffer.clone())
@@ -300,6 +316,93 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
         f.render_widget(input_text, area_rect);
     }
+
+    // Попап помощи
+    if app.show_help {
+        render_help_popup(f, area, bg_color, text_color, sel_bg);
+    }
+}
+
+fn render_help_popup(
+    f: &mut Frame,
+    area: Rect,
+    bg_color: Color,
+    text_color: Color,
+    accent: Color,
+) {
+    let popup_area = centered_rect(72, 85, area);
+    f.render_widget(Clear, popup_area);
+
+    let header = Style::default()
+        .fg(accent)
+        .add_modifier(Modifier::BOLD);
+    let key_style = Style::default()
+        .fg(Color::Yellow)
+        .add_modifier(Modifier::BOLD);
+    let desc_style = Style::default().fg(text_color);
+    let dim = Style::default().fg(Color::DarkGray);
+
+    fn row<'a>(key: &'a str, desc: &'a str, key_style: Style, desc_style: Style) -> Line<'a> {
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled(format!("{:<18}", key), key_style),
+            Span::styled(desc, desc_style),
+        ])
+    }
+
+    let lines: Vec<Line> = vec![
+        Line::from(Span::styled("  Navigation", header)),
+        Line::from(Span::styled("  ──────────────────────────────────────────", dim)),
+        row("j / ↓",         "Move down",                               key_style, desc_style),
+        row("k / ↑",         "Move up",                                 key_style, desc_style),
+        row("l / → / Enter", "Open directory",                          key_style, desc_style),
+        row("h / ← / Bksp",  "Go to parent directory",                  key_style, desc_style),
+        Line::from(""),
+        Line::from(Span::styled("  File Operations", header)),
+        Line::from(Span::styled("  ──────────────────────────────────────────", dim)),
+        row("a",             "Create new file/folder (/ = folder)",     key_style, desc_style),
+        row("D",             "Delete selected item",                    key_style, desc_style),
+        row("e",             "Open in $EDITOR",                        key_style, desc_style),
+        row("y",             "Copy to clipboard",                       key_style, desc_style),
+        row("x",             "Cut (move) to clipboard",                 key_style, desc_style),
+        row("p",             "Paste clipboard here",                    key_style, desc_style),
+        Line::from(""),
+        Line::from(Span::styled("  Favorites", header)),
+        Line::from(Span::styled("  ──────────────────────────────────────────", dim)),
+        row("f",             "Add selected to Favorites",               key_style, desc_style),
+        row("D  (Fav panel)","Remove from Favorites",                   key_style, desc_style),
+        row("Enter (Fav)",   "Navigate to favorited item",              key_style, desc_style),
+        Line::from(""),
+        Line::from(Span::styled("  Search", header)),
+        Line::from(Span::styled("  ──────────────────────────────────────────", dim)),
+        row("/",             "Start search / filter",                   key_style, desc_style),
+        row("Esc",           "Cancel search",                           key_style, desc_style),
+        Line::from(""),
+        Line::from(Span::styled("  Global", header)),
+        Line::from(Span::styled("  ──────────────────────────────────────────", dim)),
+        row("Tab",           "Switch focus: Files → Drives → Favorites",key_style, desc_style),
+        row("Ctrl+H",        "Focus Drives panel",                      key_style, desc_style),
+        row("Ctrl+L",        "Focus Files panel",                       key_style, desc_style),
+        row("Ctrl+B",        "Toggle status bar",                       key_style, desc_style),
+        row("F5",            "Hot-reload config",                       key_style, desc_style),
+        row("?",             "Toggle this help popup",                  key_style, desc_style),
+        row("q",             "Quit",                                    key_style, desc_style),
+        Line::from(""),
+        Line::from(Span::styled("  Press ? or Esc to close", dim)),
+    ];
+
+    let help = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title(" ⌨  Keyboard Shortcuts ")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(accent).add_modifier(Modifier::BOLD))
+                .style(Style::default().bg(bg_color)),
+        )
+        .wrap(Wrap { trim: false });
+
+    f.render_widget(help, popup_area);
 }
 
 // Хелпер для центрирования попапов
