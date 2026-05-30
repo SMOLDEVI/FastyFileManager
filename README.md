@@ -31,8 +31,6 @@
 <img src="assets/screenshot.png" alt="FastyFileManager in action" width="850"/>
 </div>
 
-> *To add a screenshot: take one, save it as `assets/screenshot.png` and push to the repo.*
-
 ---
 
 ## 🚀 Installation
