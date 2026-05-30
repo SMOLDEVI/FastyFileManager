@@ -1,7 +1,4 @@
 <div align="center">
-
-<img src="assets/screenshot.png" alt="FastyFileManager screenshot" width="800"/>
-
 # ⚡ FastyFileManager
 
 **A blazing-fast terminal file manager built with Rust & Ratatui**
