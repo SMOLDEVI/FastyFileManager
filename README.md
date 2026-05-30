@@ -1,4 +1,5 @@
 <div align="center">
+
 # ⚡ FastyFileManager
 
 **A blazing-fast terminal file manager built with Rust & Ratatui**
