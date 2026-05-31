@@ -2,6 +2,12 @@
 name = "ffm"
 version = "0.1.0"
 edition = "2024"
+description = "A blazing-fast terminal file manager with three-panel layout, fuzzy search, multi-select, and full keyboard control"
+license = "MIT"
+repository = "https://github.com/SMOLDEVI/FastyFileManager"
+homepage = "https://github.com/SMOLDEVI/FastyFileManager"
+keywords = ["file-manager", "tui", "terminal", "ratatui", "file-explorer"]
+categories = ["command-line-utilities", "filesystem"]
 
 [dependencies]
 crossterm = "0.29.0"
