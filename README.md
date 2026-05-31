@@ -33,11 +33,8 @@
 
 ---
 
-## 📸 Screenshot
-
-<!-- Add your screenshot here -->
 <div align="center">
-<img src="assets/screenshot.svg" alt="FastyFileManager in action" width="850"/>
+<img src="assets/screenshot.png" alt="FastyFileManager in action" width="850"/>
 </div>
 
 ---
