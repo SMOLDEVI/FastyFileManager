@@ -17,11 +17,19 @@
 - 🗂️ **Three-panel layout** — Favorites, Drives, Files, and Preview
 - 📋 **Clipboard** — Copy, Cut and Paste files & folders (recursive)
 - ★ **Favorites** — Pin any file or folder for instant access (persisted between sessions)
-- 🔍 **Fuzzy Search** — Instantly filter files as you type
-- 🎨 **Nerd Font icons** — Per-extension color coding and icons
+- 🔍 **Fuzzy Search** — Instantly filter files as you type (characters in order, not necessarily contiguous)
+- 🎨 **Nerd Font icons** — Per-extension color coding and icons (60+ file types)
 - ⚙️ **Configurable** — Full keybinding and theme customization via `config.toml`
 - 🖊️ **Editor integration** — Open files in your `$EDITOR` (nvim, vim, nano…)
-- 💾 **Hot config reload** — Apply changes without restarting
+- 💾 **Hot config reload** — Apply changes without restarting (F5)
+- 📐 **Sort modes** — Toggle between Name / Size / Date with `s`
+- 🔲 **Multi-select** — Select multiple files with `Space`, batch operations
+- ✏️ **Rename** — Rename files and folders with `r`
+- 🗑️ **Delete confirmation** — Safe deletion with y/N prompt
+- 📏 **Resizable panels** — Adjust panel widths with `Shift+←` / `Shift+→`
+- 📂 **Drive info** — Shows available free space for each drive
+- ⚡ **Compact popups** — Minimal Vim-style command bar for input and confirmations
+- 🔄 **Conflict resolution** — Overwrite / Skip / Auto-rename when pasting existing files
 
 ---
 
@@ -103,14 +111,19 @@ cargo build --release
 | `l` / `→` / `Enter` | Open directory |
 | `h` / `←` / `Backspace` | Go to parent directory |
 | `a` | Create new file or folder (end name with `/` for folder) |
-| `D` | Delete selected file/folder |
+| `r` | Rename selected item |
+| `D` | Delete selected file/folder (with confirmation) |
+| `Space` | Toggle multi-selection |
+| `s` | Cycle sort mode: Name → Size → Date |
 | `e` | Open file in `$EDITOR` |
-| `y` | **Copy** selected item to clipboard |
-| `x` | **Cut** selected item (move) |
+| `y` | **Copy** selected item(s) to clipboard |
+| `x` | **Cut** selected item(s) (move) |
 | `p` | **Paste** clipboard into current directory |
 | `f` | Add selected item to **Favorites** |
 | `/` | Start search / filter |
 | `Tab` | Switch focus: Files → Drives → Favorites |
+| `Shift+←` | Shrink center panel |
+| `Shift+→` | Expand center panel |
 
 ### ★ Favorites Panel
 
@@ -145,9 +158,21 @@ cargo build --release
 | Key | Action |
 |-----|--------|
 | `q` | Quit |
+| `?` | Toggle help popup |
 | `F5` | Hot-reload config |
 | `Ctrl-h` | Focus Drives panel |
 | `Ctrl-l` | Focus Files panel |
+| `Ctrl-b` | Toggle status bar |
+| `Tab` | Cycle focus: Files → Drives → Favorites |
+
+### 📦 Paste Conflict
+
+| Key | Action |
+|-----|--------|
+| `O` | Overwrite existing file |
+| `S` | Skip this file |
+| `R` | Auto-rename (adds suffix) |
+| `Esc` | Cancel entire paste operation |
 
 ---
 
@@ -183,7 +208,9 @@ focus_drives = "ctrl-h"
 back_dir     = "h"
 reload       = "F5"
 edit         = "e"
-help         = "p"
+rename       = "r"
+help         = "?"
+sort         = "s"
 ```
 
 > Apply changes instantly with `F5` — no restart needed!
