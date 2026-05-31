@@ -6,6 +6,8 @@ use std::env;
 use std::fs;
 use std::io::{self, Read};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::thread;
 use sysinfo::Disks;
 
 #[derive(PartialEq)]
@@ -84,6 +86,8 @@ pub struct App {
     pub conflict_paste_queue: Option<(Vec<PathBuf>, ClipboardOp, usize)>,
 
     pub config: Config,
+    pub update_available: Option<String>,
+    pub update_checker: Arc<Mutex<Option<String>>>,
 }
 
 impl App {
@@ -127,10 +131,13 @@ impl App {
             conflict_dest: None,
             conflict_paste_queue: None,
             config,
+            update_available: None,
+            update_checker: Arc::new(Mutex::new(None)),
         };
 
         app.refresh_items();
         app.refresh_drives();
+        app.spawn_update_checker();
         app
     }
 
@@ -292,6 +299,30 @@ impl App {
         };
         self.message = format!("Sort by: {}", label);
         self.refresh_items();
+    }
+
+    // --- UPDATE CHECKER ---
+    pub fn spawn_update_checker(&self) {
+        let checker = self.update_checker.clone();
+        let current = env!("CARGO_PKG_VERSION").to_string();
+        thread::spawn(move || {
+            let latest = check_github_version(&current);
+            if let Some(v) = latest
+                && let Ok(mut guard) = checker.lock() {
+                    *guard = Some(v);
+                }
+        });
+    }
+
+    pub fn check_update_result(&mut self) {
+        if self.update_available.is_some() {
+            return;
+        }
+        if let Ok(mut guard) = self.update_checker.lock()
+            && let Some(v) = guard.take() {
+                self.update_available = Some(v.clone());
+                self.message = format!("Update v{}! Run: cargo install ffm --force", v);
+            }
     }
 
     // --- PANEL RESIZE ---
@@ -494,6 +525,8 @@ impl App {
         terminal: &mut ratatui::Terminal<B>,
     ) -> io::Result<()> {
         loop {
+            self.check_update_result();
+
             terminal
                 .draw(|f| crate::ui::render(f, self))
                 .map_err(|e| io::Error::other(e.to_string()))?;
@@ -598,6 +631,7 @@ impl App {
                 match self.input_mode {
                     InputMode::Normal => {
                         if key_matches(&key, &self.config.keys.quit) {
+                            write_cwd(&self.current_dir);
                             return Ok(());
                         }
 
@@ -989,6 +1023,20 @@ fn find_available_name(dest: &std::path::Path) -> PathBuf {
     dest.with_file_name(format!("{} ({}){}", stem, 9999, ext))
 }
 
+fn write_cwd(dir: &std::path::Path) {
+    if let Some(path) = cwd_path() {
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let _ = fs::write(&path, dir.to_string_lossy().as_ref());
+    }
+}
+
+fn cwd_path() -> Option<PathBuf> {
+    directories::ProjectDirs::from("", "", "ffm")
+        .map(|p| p.data_dir().join("cwd"))
+}
+
 fn favorites_path() -> Option<PathBuf> {
     directories::ProjectDirs::from("", "", "ffm")
         .map(|p| p.data_dir().join("favorites.txt"))
@@ -1018,6 +1066,24 @@ fn save_favorites(favorites: &[PathBuf]) {
             .join("\n");
         let _ = fs::write(&path, content);
     }
+}
+
+fn check_github_version(current: &str) -> Option<String> {
+    let cmd = if cfg!(windows) { "curl.exe" } else { "curl" };
+    let url = "https://api.github.com/repos/SMOLDEVI/FastyFileManager/releases/latest";
+    let output = std::process::Command::new(cmd)
+        .args(["-sL", "-H", "User-Agent: ffm", "--connect-timeout", "5", "--max-time", "10", url])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    let response = String::from_utf8(output.stdout).ok()?;
+    let prefix = "\"tag_name\":\"";
+    let start = response.find(prefix)?;
+    let start = start + prefix.len();
+    let end = response[start..].find('\"')?;
+    let tag = &response[start..start + end];
+    let version = tag.strip_prefix('v').unwrap_or(tag);
+    if version != current { Some(version.to_string()) } else { None }
 }
 
 fn fuzzy_match(text: &str, query: &str) -> bool {

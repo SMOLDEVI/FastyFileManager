@@ -1,6 +1,6 @@
 [package]
 name = "ffm"
-version = "0.1.0"
+version = "0.1.6"
 edition = "2024"
 description = "A blazing-fast terminal file manager with three-panel layout, fuzzy search, multi-select, and full keyboard control"
 license = "MIT"

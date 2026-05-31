@@ -316,6 +316,11 @@ pub fn render(f: &mut Frame, app: &mut App) {
             None => String::new(),
         };
 
+        let update_hint = match &app.update_available {
+            Some(v) => format!(" │ ↑ v{} available", v),
+            None => String::new(),
+        };
+
         let sort_label = match app.sort_mode {
             SortMode::Name => "Name",
             SortMode::Size => "Size",
@@ -353,8 +358,8 @@ pub fn render(f: &mut Frame, app: &mut App) {
         };
 
         let status_text = format!(
-            " {} │ {}{}{} ",
-            mode_text, keys_hint, clipboard_hint, msg
+            " {} │ {}{}{}{} ",
+            mode_text, keys_hint, clipboard_hint, update_hint, msg
         );
         let footer = Paragraph::new(status_text)
             .style(Style::default().fg(text_color).bg(bg_color))

@@ -214,6 +214,42 @@ sort         = "s"
 
 ---
 
+## 🔁 Shell Integration: cd on quit
+
+When you quit `ffm`, it saves the last visited directory to `~/.local/share/ffm/cwd` (Linux) or `%APPDATA%\ffm\data\cwd` (Windows). Wrap the binary in a shell function to automatically `cd` into that directory:
+
+### Bash / Zsh
+
+```bash
+ffm() {
+    command ffm "$@"
+    cwd_file="${XDG_DATA_HOME:-$HOME/.local/share}/ffm/cwd"
+    if [ -f "$cwd_file" ]; then
+        cd "$(cat "$cwd_file")"
+    fi
+}
+```
+
+### fish
+
+```fish
+function ffm
+    command ffm $argv
+    set cwd_file "$HOME/.local/share/ffm/cwd"
+    if test -f "$cwd_file"
+        cd (cat "$cwd_file")
+    end
+end
+```
+
+### Windows PowerShell (profile)
+
+```powershell
+function ffm { & ffm.exe $args; $cwd = "$env:APPDATA\ffm\data\cwd"; if (Test-Path $cwd) { Set-Location (Get-Content $cwd -Raw).Trim() } }
+```
+
+---
+
 ## 🏗️ Project Structure
 
 ```
