@@ -31,6 +31,19 @@ fn main() -> io::Result<()> {
     )?;
     terminal.show_cursor()?;
 
+    if let Some(v) = &app.update_available {
+        let version = env!("CARGO_PKG_VERSION");
+        println!();
+        println!("  ╔══════════════════════════════╗");
+        println!("  ║     Update available!        ║");
+        println!("  ║                              ║");
+        println!("  ║    v{} → v{:<16}║", version, v);
+        println!("  ║                              ║");
+        println!("  ║    cargo install ffm --force ║");
+        println!("  ╚══════════════════════════════╝");
+        println!();
+    }
+
     if let Err(err) = res {
         println!("{:?}", err)
     }
