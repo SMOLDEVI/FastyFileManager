@@ -1071,11 +1071,12 @@ fn save_favorites(favorites: &[PathBuf]) {
 fn check_github_version(current: &str) -> Option<String> {
     let cmd = if cfg!(windows) { "curl.exe" } else { "curl" };
     let url = "https://api.github.com/repos/SMOLDEVI/FastyFileManager/releases/latest";
-    let output = std::process::Command::new(cmd)
-        .args(["-sL", "-H", "User-Agent: ffm", "--connect-timeout", "5", "--max-time", "10", url])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())?;
+    let mut child = std::process::Command::new(cmd);
+    child.args(["-sL", "-H", "User-Agent: ffm", "--connect-timeout", "5", "--max-time", "10", url]);
+    if cfg!(windows) {
+        child.arg("--ssl-no-revoke");
+    }
+    let output = child.output().ok().filter(|o| o.status.success())?;
     let response = String::from_utf8(output.stdout).ok()?;
     let prefix = "\"tag_name\":\"";
     let start = response.find(prefix)?;
