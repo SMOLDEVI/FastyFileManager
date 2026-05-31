@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::widgets::ListState;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
 use std::fs;
@@ -8,6 +9,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::SystemTime;
 use sysinfo::Disks;
 
 #[derive(PartialEq)]
@@ -47,9 +49,17 @@ pub enum ConflictAction {
     Cancel,
 }
 
+#[derive(Clone, Copy)]
+pub struct CachedMeta {
+    pub is_dir: bool,
+    pub size: u64,
+    pub modified: Option<SystemTime>,
+}
+
 pub struct App {
     pub current_dir: PathBuf,
     pub items: Vec<PathBuf>,
+    pub meta_cache: HashMap<PathBuf, CachedMeta>,
     pub filtered_items: Vec<PathBuf>,
     pub state: ListState,
 
@@ -104,6 +114,7 @@ impl App {
         let mut app = App {
             current_dir,
             items: Vec::new(),
+            meta_cache: HashMap::new(),
             filtered_items: Vec::new(),
             state: ListState::default(),
             drives: Vec::new(),
@@ -155,17 +166,27 @@ impl App {
 
     pub fn refresh_items(&mut self) {
         self.items.clear();
+        self.meta_cache.clear();
         if let Ok(entries) = fs::read_dir(&self.current_dir) {
             for entry in entries.flatten() {
-                self.items.push(entry.path());
+                let path = entry.path();
+                let is_dir = path.is_dir();
+                if let Ok(meta) = fs::metadata(&path) {
+                    self.meta_cache.insert(path.clone(), CachedMeta {
+                        is_dir,
+                        size: meta.len(),
+                        modified: meta.modified().ok(),
+                    });
+                }
+                self.items.push(path);
             }
         }
 
         match self.sort_mode {
             SortMode::Name => {
                 self.items.sort_by(|a, b| {
-                    let a_is_dir = a.is_dir();
-                    let b_is_dir = b.is_dir();
+                    let a_is_dir = self.meta_cache.get(a).is_some_and(|m| m.is_dir);
+                    let b_is_dir = self.meta_cache.get(b).is_some_and(|m| m.is_dir);
                     if a_is_dir == b_is_dir {
                         a.file_name().cmp(&b.file_name())
                     } else if a_is_dir {
@@ -177,25 +198,25 @@ impl App {
             }
             SortMode::Size => {
                 self.items.sort_by(|a, b| {
-                    let a_is_dir = a.is_dir();
-                    let b_is_dir = b.is_dir();
+                    let a_is_dir = self.meta_cache.get(a).is_some_and(|m| m.is_dir);
+                    let b_is_dir = self.meta_cache.get(b).is_some_and(|m| m.is_dir);
                     if a_is_dir != b_is_dir {
                         return if a_is_dir { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater };
                     }
-                    let a_size = fs::metadata(a).ok().map(|m| m.len()).unwrap_or(0);
-                    let b_size = fs::metadata(b).ok().map(|m| m.len()).unwrap_or(0);
+                    let a_size = self.meta_cache.get(a).map(|m| m.size).unwrap_or(0);
+                    let b_size = self.meta_cache.get(b).map(|m| m.size).unwrap_or(0);
                     b_size.cmp(&a_size)
                 });
             }
             SortMode::Date => {
                 self.items.sort_by(|a, b| {
-                    let a_is_dir = a.is_dir();
-                    let b_is_dir = b.is_dir();
+                    let a_is_dir = self.meta_cache.get(a).is_some_and(|m| m.is_dir);
+                    let b_is_dir = self.meta_cache.get(b).is_some_and(|m| m.is_dir);
                     if a_is_dir != b_is_dir {
                         return if a_is_dir { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater };
                     }
-                    let a_date = fs::metadata(a).ok().and_then(|m| m.modified().ok());
-                    let b_date = fs::metadata(b).ok().and_then(|m| m.modified().ok());
+                    let a_date = self.meta_cache.get(a).and_then(|m| m.modified);
+                    let b_date = self.meta_cache.get(b).and_then(|m| m.modified);
                     b_date.cmp(&a_date)
                 });
             }
@@ -245,7 +266,8 @@ impl App {
 
         if let Some(selected) = self.state.selected()
             && let Some(path) = self.filtered_items.get(selected) {
-                if path.is_dir() {
+                let is_dir = self.meta_cache.get(path).is_some_and(|m| m.is_dir);
+                if is_dir {
                     self.preview_content = format!("Directory: {}\n\nContains:", path.display());
                     if let Ok(entries) = fs::read_dir(path) {
                         for (i, entry) in entries.flatten().enumerate() {
@@ -263,7 +285,8 @@ impl App {
                             let mut buffer = [0; 4096];
                             if let Ok(n) = file.read(&mut buffer) {
                                 let text = String::from_utf8_lossy(&buffer[..n]);
-                                self.preview_content = text.to_string();
+                                let content = text.to_string();
+                                self.preview_content = content.lines().take(60).collect::<Vec<_>>().join("\n");
                             } else {
                                 self.preview_content = "Binary/Unreadable".to_string();
                             }

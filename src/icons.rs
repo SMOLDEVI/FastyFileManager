@@ -1,8 +1,8 @@
 use ratatui::style::Color;
 use std::path::Path;
 
-pub fn get_icon(path: &Path) -> &'static str {
-    if path.is_dir() {
+pub fn get_icon(path: &Path, is_dir: bool) -> &'static str {
+    if is_dir {
         return "";
     }
     match path.extension().and_then(|e| e.to_str()) {

@@ -8,7 +8,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
-use std::fs;
 use std::time::UNIX_EPOCH;
 
 pub fn render(f: &mut Frame, app: &mut App) {
@@ -173,7 +172,9 @@ pub fn render(f: &mut Frame, app: &mut App) {
         .enumerate()
         .map(|(idx, path)| {
             let name = path.file_name().unwrap_or_default().to_string_lossy();
-            let icon = get_icon(path);
+            let meta = app.meta_cache.get(path);
+            let is_dir = meta.is_some_and(|m| m.is_dir);
+            let icon = get_icon(path, is_dir);
 
             let is_selected = app.selected_indices.contains(&idx);
 
@@ -182,7 +183,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
                 .as_ref()
                 .is_some_and(|(paths, _)| paths.contains(path));
 
-            let icon_color = if path.is_dir() {
+            let icon_color = if is_dir {
                 dir_base_color
             } else {
                 get_icon_color(path).unwrap_or(file_base_color)
@@ -205,10 +206,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
                 ""
             };
 
-            let (size_str, date_str) = if path.is_dir() {
+            let (size_str, date_str) = if is_dir {
                 (String::new(), String::new())
-            } else if let Ok(meta) = fs::metadata(path) {
-                (format_size(meta.len()), format_date(meta.modified()))
+            } else if let Some(m) = meta {
+                (format_size(m.size), format_date(m.modified))
             } else {
                 (String::new(), String::new())
             };
@@ -532,9 +533,9 @@ fn format_size(size: u64) -> String {
     }
 }
 
-fn format_date(modified: Result<std::time::SystemTime, std::io::Error>) -> String {
+fn format_date(modified: Option<std::time::SystemTime>) -> String {
     match modified {
-        Ok(time) => {
+        Some(time) => {
             let duration = time.duration_since(UNIX_EPOCH).unwrap_or_default();
             let total_secs = duration.as_secs();
             let days = total_secs / 86400;
@@ -570,7 +571,7 @@ fn format_date(modified: Result<std::time::SystemTime, std::io::Error>) -> Strin
             let d = remaining + 1;
             format!("{:04}-{:02}-{:02}", y, m, d)
         }
-        Err(_) => String::new(),
+        None => String::new(),
     }
 }
 
