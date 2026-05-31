@@ -37,9 +37,11 @@ pub struct KeysConfig {
     pub focus_files: String,
     pub focus_drives: String,
     pub back_dir: String,
-    pub reload: String, // Поле для кнопки перезагрузки
+    pub reload: String,
     pub edit: String,
-    pub help: String, // Меню подсказок
+    pub rename: String,
+    pub help: String,
+    pub sort: String,
 }
 
 impl ThemeConfig {
@@ -72,7 +74,9 @@ impl KeysConfig {
             back_dir: "h".to_string(),
             reload: "F5".to_string(),
             edit: "e".to_string(),
-            help: "p".to_string(),
+            rename: "r".to_string(),
+            help: "?".to_string(),
+            sort: "s".to_string(),
         }
     }
 }
@@ -101,7 +105,9 @@ focus_drives = "ctrl-h"
 back_dir = "h"
 reload = "F5"
 edit = "e"
-help = "p"
+rename = "r"
+help = "?"
+sort = "s"
 "##;
 
     /// "Умная" загрузка конфига
@@ -111,11 +117,10 @@ help = "p"
         // 1. Приоритет локальному config.toml (если он лежит прямо рядом с программой)
         paths_to_check.push(PathBuf::from("config.toml"));
         
-        if let Ok(exe_path) = env::current_exe() {
-            if let Some(exe_dir) = exe_path.parent() {
+        if let Ok(exe_path) = env::current_exe()
+            && let Some(exe_dir) = exe_path.parent() {
                 paths_to_check.push(exe_dir.join("config.toml"));
             }
-        }
 
         // 2. Системная директория (AppData/Roaming/ffm на Windows, ~/.config/ffm на Linux)
         if let Some(proj_dirs) = directories::ProjectDirs::from("", "", "ffm") {
@@ -123,11 +128,10 @@ help = "p"
             let config_path = config_dir.join("config.toml");
             
             // Если конфига в системе еще нет — заботливо создаем его с дефолтными настройками
-            if !config_path.exists() {
-                if fs::create_dir_all(config_dir).is_ok() {
+            if !config_path.exists()
+                && fs::create_dir_all(config_dir).is_ok() {
                     let _ = fs::write(&config_path, Self::DEFAULT_TOML);
                 }
-            }
             
             // Добавляем системный путь в список проверок как запасной вариант (или основной для пользователя)
             paths_to_check.push(config_path);

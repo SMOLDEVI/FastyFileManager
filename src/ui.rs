@@ -1,4 +1,4 @@
-use crate::app::{App, ClipboardOp, Focus, InputMode};
+use crate::app::{App, ClipboardOp, Focus, InputMode, SortMode};
 use crate::icons::{get_icon, get_icon_color};
 use crate::theme::parse_color;
 use ratatui::{
@@ -8,6 +8,8 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
+use std::fs;
+use std::time::UNIX_EPOCH;
 
 pub fn render(f: &mut Frame, app: &mut App) {
     let theme = &app.config.theme;
@@ -43,13 +45,16 @@ pub fn render(f: &mut Frame, app: &mut App) {
         .constraints(vertical_constraints)
         .split(area);
 
-    // Горизонтальное деление: 20% | 40% | 40%
+    // Горизонтальное деление: динамические проценты
+    let left_pct = app.left_panel_pct;
+    let center_pct = app.center_panel_pct;
+    let right_pct = 100u16.saturating_sub(left_pct + center_pct);
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(20),
-            Constraint::Percentage(40),
-            Constraint::Percentage(40),
+            Constraint::Percentage(left_pct),
+            Constraint::Percentage(center_pct),
+            Constraint::Percentage(right_pct),
         ])
         .split(vertical_chunks[0]);
 
@@ -109,11 +114,20 @@ pub fn render(f: &mut Frame, app: &mut App) {
     f.render_stateful_widget(fav_list, left_chunks[0], &mut app.favorites_state);
 
     // --- 2. ПАНЕЛЬ ДИСКОВ (СЛЕВА СНИЗУ) ---
+    fn format_bytes(bytes: u64) -> String {
+        const U: &[&str] = &["B", "KB", "MB", "GB", "TB"];
+        let mut s = bytes as f64;
+        let mut i = 0;
+        while s >= 1024.0 && i < U.len() - 1 { s /= 1024.0; i += 1; }
+        if i == 0 { format!("{} B", bytes) } else { format!("{:.1} {}", s, U[i]) }
+    }
+
     let drive_items: Vec<ListItem> = app
         .drives
         .iter()
-        .map(|drive| {
-            ListItem::new(format!("󰉉 {}", drive))
+        .map(|(mount, free)| {
+            let free_str = format_bytes(*free);
+            ListItem::new(format!("󰉉 {}  {} free", mount, free_str))
                 .style(Style::default().fg(text_color).bg(bg_color))
         })
         .collect();
@@ -150,39 +164,71 @@ pub fn render(f: &mut Frame, app: &mut App) {
     f.render_stateful_widget(drive_list, left_chunks[1], &mut app.drive_state);
 
     // --- 3. ПАНЕЛЬ ФАЙЛОВ (ЦЕНТР) ---
+    let panel_width = main_chunks[1].width as usize;
+    let name_max_width = panel_width.saturating_sub(26);
+
     let file_items: Vec<ListItem> = app
         .filtered_items
         .iter()
-        .map(|path| {
+        .enumerate()
+        .map(|(idx, path)| {
             let name = path.file_name().unwrap_or_default().to_string_lossy();
             let icon = get_icon(path);
+
+            let is_selected = app.selected_indices.contains(&idx);
 
             let in_clipboard = app
                 .clipboard
                 .as_ref()
-                .map(|(p, _)| p == path)
-                .unwrap_or(false);
+                .is_some_and(|(paths, _)| paths.contains(path));
 
-            let color = if path.is_dir() {
+            let icon_color = if path.is_dir() {
                 dir_base_color
             } else {
                 get_icon_color(path).unwrap_or(file_base_color)
             };
 
-            let marker = if in_clipboard {
+            let has_sel = !app.selected_indices.is_empty();
+            let sel_mark = if has_sel {
+                if is_selected { " [x]" } else { " [ ]" }
+            } else {
+                ""
+            };
+
+            let clipboard_mark = if in_clipboard {
                 match app.clipboard.as_ref().map(|(_, op)| op) {
-                    Some(ClipboardOp::Copy) => " [C]",
-                    Some(ClipboardOp::Cut) => " [X]",
+                    Some(ClipboardOp::Copy) => "[C]",
+                    Some(ClipboardOp::Cut) => "[X]",
                     None => "",
                 }
             } else {
                 ""
             };
 
-            let fav_mark = if app.favorites.contains(path) { " ★" } else { "" };
+            let (size_str, date_str) = if path.is_dir() {
+                (String::new(), String::new())
+            } else if let Ok(meta) = fs::metadata(path) {
+                (format_size(meta.len()), format_date(meta.modified()))
+            } else {
+                (String::new(), String::new())
+            };
 
-            let content = format!("{} {}{}{}", icon, name, marker, fav_mark);
-            ListItem::new(content).style(Style::default().fg(color).bg(bg_color))
+            let name_display = if name.len() > name_max_width {
+                let truncated: String = name.chars().take(name_max_width.saturating_sub(1)).collect();
+                format!("{}…", truncated)
+            } else {
+                name.to_string()
+            };
+
+            let line = Line::from(vec![
+                Span::styled(sel_mark, Style::default().fg(text_color)),
+                Span::styled(icon, Style::default().fg(icon_color)),
+                Span::styled(
+                    format!(" {} {} {:>8} {}", name_display, clipboard_mark, size_str, date_str),
+                    Style::default().fg(text_color),
+                ),
+            ]);
+            ListItem::new(line).style(Style::default().bg(bg_color))
         })
         .collect();
 
@@ -203,10 +249,20 @@ pub fn render(f: &mut Frame, app: &mut App) {
         Style::default()
     };
 
+    let sel_count = app.selected_indices.len();
+    let sel_info = if sel_count > 0 { format!(" ({})", sel_count) } else { String::new() };
+
     let list_title = if app.input_mode == InputMode::Search {
         format!(" Search: {} ", app.search_query)
     } else {
-        format!(" {} ", app.current_dir.to_string_lossy())
+        let path_str = app.current_dir.to_string_lossy();
+        let path_str = if path_str.len() > 50 {
+            let start = path_str.len().saturating_sub(47);
+            format!("…{}", &path_str[start..])
+        } else {
+            path_str.to_string()
+        };
+        format!(" {}{} ", path_str, sel_info)
     };
 
     let file_list = List::new(file_items)
@@ -241,31 +297,45 @@ pub fn render(f: &mut Frame, app: &mut App) {
     // --- ФУТЕР (если включён) ---
     if app.show_statusbar {
         let clipboard_hint = match &app.clipboard {
-            Some((p, ClipboardOp::Copy)) => format!(
-                " │ 󰆏 Copy: {}",
-                p.file_name().unwrap_or_default().to_string_lossy()
-            ),
-            Some((p, ClipboardOp::Cut)) => format!(
-                " │ 󰆐 Cut: {}",
-                p.file_name().unwrap_or_default().to_string_lossy()
-            ),
+            Some((paths, ClipboardOp::Copy)) => {
+                let n = paths.len();
+                if n == 1 {
+                    format!(" │ 󰆏 Copy: {}", paths[0].file_name().unwrap_or_default().to_string_lossy())
+                } else {
+                    format!(" │ 󰆏 Copy: {} items", n)
+                }
+            }
+            Some((paths, ClipboardOp::Cut)) => {
+                let n = paths.len();
+                if n == 1 {
+                    format!(" │ 󰆐 Cut: {}", paths[0].file_name().unwrap_or_default().to_string_lossy())
+                } else {
+                    format!(" │ 󰆐 Cut: {} items", n)
+                }
+            }
             None => String::new(),
         };
 
+        let sort_label = match app.sort_mode {
+            SortMode::Name => "Name",
+            SortMode::Size => "Size",
+            SortMode::Date => "Date",
+        };
         let mode_text = match app.input_mode {
             InputMode::Normal => match app.focus {
-                Focus::FileList => " FILES",
-                Focus::DriveList => " DRIVES",
-                Focus::Favorites => "★ FAVORITES",
+                Focus::FileList => format!(" FILES [{}]", sort_label),
+                Focus::DriveList => " DRIVES".to_string(),
+                Focus::Favorites => "★ FAVORITES".to_string(),
             },
-            InputMode::Editing => " EDITING",
-            InputMode::Search => " SEARCH",
+            InputMode::Editing => " EDITING".to_string(),
+            InputMode::Search => " SEARCH".to_string(),
+            InputMode::Renaming => " RENAME".to_string(),
         };
 
         let keys_hint = match app.input_mode {
             InputMode::Normal => match app.focus {
                 Focus::FileList => format!(
-                    "hjkl Nav │ a New │ D Del │ {} Edit │ y Copy │ x Cut │ p Paste │ f Fav │ / Search │ ? Help │ Ctrl+B Bar",
+                    "hjkl Nav │ Space Sel │ s Sort │ a New │ r Ren │ D Del │ {} Edit │ y Copy │ x Cut │ p Paste │ f Fav │ / Search │ ? Help │ Ctrl+B Bar",
                     app.config.keys.edit
                 ),
                 Focus::DriveList => "jk Nav │ Enter Open │ Tab Switch │ ? Help │ Ctrl+B Bar".to_string(),
@@ -273,6 +343,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             },
             InputMode::Editing => "Enter Save │ Esc Cancel".to_string(),
             InputMode::Search => "Enter Confirm │ Esc Cancel │ ↑↓ Navigate".to_string(),
+            InputMode::Renaming => "Enter Confirm │ Esc Cancel".to_string(),
         };
 
         let msg = if app.message.is_empty() {
@@ -317,9 +388,66 @@ pub fn render(f: &mut Frame, app: &mut App) {
         f.render_widget(input_text, area_rect);
     }
 
+    // Переименование файла/папки
+    if let InputMode::Renaming = app.input_mode {
+        let area_rect = centered_rect(60, 20, area);
+        f.render_widget(Clear, area_rect);
+
+        let popup_block = Block::default()
+            .title(" Rename file/folder ")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(Style::default().bg(bg_color).fg(text_color));
+
+        let input_text = Paragraph::new(app.input_buffer.clone())
+            .style(Style::default().fg(Color::Yellow))
+            .block(popup_block);
+
+        f.render_widget(input_text, area_rect);
+    }
+
+    // Подтверждение удаления
+    if app.confirm_delete {
+        let area_rect = centered_rect(50, 20, area);
+        f.render_widget(Clear, area_rect);
+
+        let delete_block = Block::default()
+            .title(" Confirm Delete ")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(Style::default().bg(bg_color).fg(text_color));
+
+        let delete_text = Paragraph::new("Are you sure? (y/N)")
+            .style(Style::default().fg(Color::LightRed))
+            .block(delete_block);
+
+        f.render_widget(delete_text, area_rect);
+    }
+
+    // Конфликт при вставке
+    if app.conflict_src.is_some() {
+        let area_rect = centered_rect(60, 20, area);
+        f.render_widget(Clear, area_rect);
+
+        let conflict_block = Block::default()
+            .title(" File conflict ")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(Style::default().bg(bg_color).fg(Color::LightRed));
+
+        let conflict_text = Paragraph::new(vec![
+            Line::from(Span::styled("Destination file already exists.", Style::default().fg(text_color))),
+            Line::from(""),
+            Line::from(Span::styled("(O) Overwrite   (S) Skip   (R) Auto-rename   (Esc) Cancel", Style::default().fg(Color::Yellow))),
+        ])
+        .block(conflict_block);
+
+        f.render_widget(conflict_text, area_rect);
+    }
+
     // Попап помощи
     if app.show_help {
-        render_help_popup(f, area, bg_color, text_color, sel_bg);
+        render_help_popup(f, area, bg_color, text_color, sel_bg, app.help_scroll);
     }
 }
 
@@ -329,6 +457,7 @@ fn render_help_popup(
     bg_color: Color,
     text_color: Color,
     accent: Color,
+    scroll: u16,
 ) {
     let popup_area = centered_rect(72, 85, area);
     f.render_widget(Clear, popup_area);
@@ -357,11 +486,16 @@ fn render_help_popup(
         row("k / ↑",         "Move up",                                 key_style, desc_style),
         row("l / → / Enter", "Open directory",                          key_style, desc_style),
         row("h / ← / Bksp",  "Go to parent directory",                  key_style, desc_style),
+        row("← Shift",       "Shrink center panel",                     key_style, desc_style),
+        row("→ Shift",       "Expand center panel",                     key_style, desc_style),
         Line::from(""),
         Line::from(Span::styled("  File Operations", header)),
         Line::from(Span::styled("  ──────────────────────────────────────────", dim)),
         row("a",             "Create new file/folder (/ = folder)",     key_style, desc_style),
-        row("D",             "Delete selected item",                    key_style, desc_style),
+        row("r",             "Rename selected item",                    key_style, desc_style),
+        row("D",             "Delete selected item (with confirm)",     key_style, desc_style),
+        row("Space",         "Toggle selection",                        key_style, desc_style),
+        row("s",             "Cycle sort: Name / Size / Date",          key_style, desc_style),
         row("e",             "Open in $EDITOR",                        key_style, desc_style),
         row("y",             "Copy to clipboard",                       key_style, desc_style),
         row("x",             "Cut (move) to clipboard",                 key_style, desc_style),
@@ -400,9 +534,67 @@ fn render_help_popup(
                 .border_style(Style::default().fg(accent).add_modifier(Modifier::BOLD))
                 .style(Style::default().bg(bg_color)),
         )
+        .scroll((scroll, 0))
         .wrap(Wrap { trim: false });
 
     f.render_widget(help, popup_area);
+}
+
+fn format_size(size: u64) -> String {
+    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
+    let mut s = size as f64;
+    let mut i = 0;
+    while s >= 1024.0 && i < UNITS.len() - 1 {
+        s /= 1024.0;
+        i += 1;
+    }
+    if i == 0 {
+        format!("{} B", size)
+    } else {
+        format!("{:.1} {}", s, UNITS[i])
+    }
+}
+
+fn format_date(modified: Result<std::time::SystemTime, std::io::Error>) -> String {
+    match modified {
+        Ok(time) => {
+            let duration = time.duration_since(UNIX_EPOCH).unwrap_or_default();
+            let total_secs = duration.as_secs();
+            let days = total_secs / 86400;
+
+            let mut y = 1970i64;
+            let mut remaining = days as i64;
+
+            loop {
+                let days_in_year = if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 { 366 } else { 365 };
+                if remaining < days_in_year {
+                    break;
+                }
+                remaining -= days_in_year;
+                y += 1;
+            }
+
+            let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+            let months_days: &[i64] = if leap {
+                &[31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+            } else {
+                &[31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+            };
+
+            let mut m = 1i64;
+            for &md in months_days {
+                if remaining < md {
+                    break;
+                }
+                remaining -= md;
+                m += 1;
+            }
+
+            let d = remaining + 1;
+            format!("{:04}-{:02}-{:02}", y, m, d)
+        }
+        Err(_) => String::new(),
+    }
 }
 
 // Хелпер для центрирования попапов

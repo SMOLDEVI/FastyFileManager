@@ -5,8 +5,7 @@ edition = "2024"
 
 [dependencies]
 crossterm = "0.29.0"
-num_parser = "1.0.2"
-rand = "0.10.0-rc.5"
+
 ratatui = "0.30.0-beta.0"
 open = "5.3.3"
 serde = { version = "1.0.228", features = ["default", "derive"] }
