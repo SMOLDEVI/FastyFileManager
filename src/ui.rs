@@ -426,6 +426,11 @@ pub fn render(f: &mut Frame, app: &mut App) {
     if app.show_help {
         render_help_popup(f, area, bg_color, text_color, sel_bg, app.help_scroll);
     }
+
+    // Попап обновления при выходе
+    if app.pending_quit {
+        render_update_popup(f, area, bg_color, text_color, sel_bg, &app.update_available);
+    }
 }
 
 fn render_help_popup(
@@ -515,6 +520,68 @@ fn render_help_popup(
         .wrap(Wrap { trim: false });
 
     f.render_widget(help, popup_area);
+}
+
+fn render_update_popup(
+    f: &mut Frame,
+    area: Rect,
+    bg_color: Color,
+    text_color: Color,
+    accent: Color,
+    version: &Option<String>,
+) {
+    let popup_area = centered_rect(48, 20, area);
+    f.render_widget(Clear, popup_area);
+
+    let content: Vec<Line> = match version {
+        Some(v) => vec![
+            Line::from(Span::styled("  ┌──────────────────────┐", Style::default().fg(accent))),
+            Line::from(Span::styled("  │                      │", Style::default().fg(accent))),
+            Line::from(Span::styled(
+                format!("  │  {:^20}  │", "Update available!"),
+                Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD),
+            )),
+            Line::from(Span::styled("  │                      │", Style::default().fg(accent))),
+            Line::from(Span::styled(
+                format!("  │  {:^20}  │", format!("v{} → v{}", env!("CARGO_PKG_VERSION"), v)),
+                Style::default().fg(text_color),
+            )),
+            Line::from(Span::styled("  │                      │", Style::default().fg(accent))),
+            Line::from(Span::styled(
+                "  │  cargo install ffm  │",
+                Style::default().fg(Color::Yellow),
+            )),
+            Line::from(Span::styled(
+                "  │  --force            │",
+                Style::default().fg(Color::Yellow),
+            )),
+            Line::from(Span::styled("  │                      │", Style::default().fg(accent))),
+            Line::from(Span::styled("  └──────────────────────┘", Style::default().fg(accent))),
+            Line::from(Span::styled(
+                "  Press any key to exit",
+                Style::default().fg(Color::DarkGray),
+            )),
+        ],
+        None => vec![
+            Line::from(Span::styled(
+                "  Press any key to exit",
+                Style::default().fg(Color::DarkGray),
+            )),
+        ],
+    };
+
+    let block = Block::default()
+        .title(" ⬆  Update ")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD))
+        .style(Style::default().bg(bg_color));
+
+    let para = Paragraph::new(content)
+        .block(block)
+        .alignment(ratatui::layout::Alignment::Center);
+
+    f.render_widget(para, popup_area);
 }
 
 fn format_size(size: u64) -> String {

@@ -88,6 +88,7 @@ pub struct App {
     pub config: Config,
     pub update_available: Option<String>,
     pub update_checker: Arc<Mutex<Option<String>>>,
+    pub pending_quit: bool,
 }
 
 impl App {
@@ -133,6 +134,7 @@ impl App {
             config,
             update_available: None,
             update_checker: Arc::new(Mutex::new(None)),
+            pending_quit: false,
         };
 
         app.refresh_items();
@@ -628,11 +630,20 @@ impl App {
                     continue;
                 }
 
+                if self.pending_quit {
+                    write_cwd(&self.current_dir);
+                    return Ok(());
+                }
+
                 match self.input_mode {
                     InputMode::Normal => {
                         if key_matches(&key, &self.config.keys.quit) {
-                            write_cwd(&self.current_dir);
-                            return Ok(());
+                            if self.update_available.is_some() && !self.pending_quit {
+                                self.pending_quit = true;
+                            } else {
+                                write_cwd(&self.current_dir);
+                                return Ok(());
+                            }
                         }
 
                         if key_matches(&key, &self.config.keys.search) {
