@@ -368,81 +368,53 @@ pub fn render(f: &mut Frame, app: &mut App) {
         f.render_widget(footer, vertical_chunks[1]);
     }
 
-    // --- POPUPS ---
+    // --- COMPACT BOTTOM BAR POPUPS (Vim-style) ---
+    //
+    fn cmd_bar(f: &mut Frame, area: Rect, title: &str, content: Vec<Line>, fg: Color, bg: Color) {
+        let bar_rect = Rect { x: area.x + 1, y: area.bottom().saturating_sub(3), width: area.width.saturating_sub(2), height: 3 };
+        f.render_widget(Clear, bar_rect);
+        let block = Block::default()
+            .title(format!(" {} ", title))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(Style::default().bg(bg).fg(fg));
+        let para = Paragraph::new(content).block(block);
+        f.render_widget(para, bar_rect);
+    }
 
     // Создание файла/папки
     if let InputMode::Editing = app.input_mode {
-        let area_rect = centered_rect(60, 20, area);
-        f.render_widget(Clear, area_rect);
-
-        let popup_block = Block::default()
-            .title(" New file/folder  (end name with / for folder) ")
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .style(Style::default().bg(bg_color).fg(text_color));
-
-        let input_text = Paragraph::new(app.input_buffer.clone())
-            .style(Style::default().fg(Color::Yellow))
-            .block(popup_block);
-
-        f.render_widget(input_text, area_rect);
+        cmd_bar(f, area, " New  (end with / for folder) ", vec![
+            Line::from(Span::styled(app.input_buffer.clone(), Style::default().fg(Color::Yellow))),
+        ], text_color, bg_color);
     }
 
-    // Переименование файла/папки
+    // Переименование
     if let InputMode::Renaming = app.input_mode {
-        let area_rect = centered_rect(60, 20, area);
-        f.render_widget(Clear, area_rect);
-
-        let popup_block = Block::default()
-            .title(" Rename file/folder ")
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .style(Style::default().bg(bg_color).fg(text_color));
-
-        let input_text = Paragraph::new(app.input_buffer.clone())
-            .style(Style::default().fg(Color::Yellow))
-            .block(popup_block);
-
-        f.render_widget(input_text, area_rect);
+        cmd_bar(f, area, " Rename ", vec![
+            Line::from(Span::styled(app.input_buffer.clone(), Style::default().fg(Color::Yellow))),
+        ], text_color, bg_color);
     }
 
     // Подтверждение удаления
     if app.confirm_delete {
-        let area_rect = centered_rect(50, 20, area);
-        f.render_widget(Clear, area_rect);
-
-        let delete_block = Block::default()
-            .title(" Confirm Delete ")
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .style(Style::default().bg(bg_color).fg(text_color));
-
-        let delete_text = Paragraph::new("Are you sure? (y/N)")
-            .style(Style::default().fg(Color::LightRed))
-            .block(delete_block);
-
-        f.render_widget(delete_text, area_rect);
+        let msg = if !app.selected_indices.is_empty() {
+            format!("Delete {} item(s)? (y/N)", app.selected_indices.len())
+        } else if let Some(ref p) = app.pending_delete {
+            format!("Delete '{}'? (y/N)", p.file_name().unwrap_or_default().to_string_lossy())
+        } else {
+            "Delete? (y/N)".to_string()
+        };
+        cmd_bar(f, area, " Confirm ", vec![
+            Line::from(Span::styled(msg, Style::default().fg(Color::LightRed))),
+        ], Color::LightRed, bg_color);
     }
 
     // Конфликт при вставке
     if app.conflict_src.is_some() {
-        let area_rect = centered_rect(60, 20, area);
-        f.render_widget(Clear, area_rect);
-
-        let conflict_block = Block::default()
-            .title(" File conflict ")
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .style(Style::default().bg(bg_color).fg(Color::LightRed));
-
-        let conflict_text = Paragraph::new(vec![
-            Line::from(Span::styled("Destination file already exists.", Style::default().fg(text_color))),
-            Line::from(""),
-            Line::from(Span::styled("(O) Overwrite   (S) Skip   (R) Auto-rename   (Esc) Cancel", Style::default().fg(Color::Yellow))),
-        ])
-        .block(conflict_block);
-
-        f.render_widget(conflict_text, area_rect);
+        cmd_bar(f, area, " Conflict ", vec![
+            Line::from(Span::styled("(O)verwrite  (S)kip  (R)ename  (Esc)Cancel", Style::default().fg(Color::Yellow))),
+        ], Color::LightRed, bg_color);
     }
 
     // Попап помощи
